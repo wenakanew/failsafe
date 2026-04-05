@@ -10,14 +10,13 @@ events_bp = Blueprint("events_bp", __name__)
 def paginate(query):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    if request.is_json:
-        data = request.get_json(silent=True) or {}
-        page = data.get('page', page)
-        per_page = data.get('per_page', per_page)
+    
+    data = request.get_json(silent=True, force=True) or request.form or {}
+    page = data.get('page', page)
+    per_page = data.get('per_page', per_page)
         
     total = query.count()
-    items = query.paginate(page, per_page)
-    # Exclude nested models to prevent huge responses
+    items = query.paginate(int(page), int(per_page))
     return {
         "kind": "list",
         "sample": [model_to_dict(i, max_depth=1) for i in items],
@@ -26,7 +25,7 @@ def paginate(query):
 
 @events_bp.route('/events', methods=['POST'])
 def create_event():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     if 'event_type' not in data or 'url_id' not in data:
         abort(400, description="Missing required fields: event_type, url_id")
         
@@ -47,15 +46,15 @@ def create_event():
 @events_bp.route('/events', methods=['GET'])
 def get_events():
     query = Event.select()
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     
     uid = request.args.get('user_id') or data.get('user_id')
     if uid is not None:
-        query = query.where(Event.user_id == uid)
+        query = query.where(Event.user == uid)
         
     urlid = request.args.get('url_id') or data.get('url_id')
     if urlid is not None:
-        query = query.where(Event.url_id == urlid)
+        query = query.where(Event.url == urlid)
         
     evtype = request.args.get('event_type') or data.get('event_type')
     if evtype is not None:

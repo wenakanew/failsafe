@@ -10,13 +10,13 @@ urls_bp = Blueprint("urls_bp", __name__)
 def paginate(query):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    if request.is_json:
-        data = request.get_json(silent=True) or {}
-        page = data.get('page', page)
-        per_page = data.get('per_page', per_page)
+    
+    data = request.get_json(silent=True, force=True) or request.form or {}
+    page = data.get('page', page)
+    per_page = data.get('per_page', per_page)
         
     total = query.count()
-    items = query.paginate(page, per_page)
+    items = query.paginate(int(page), int(per_page))
     return {
         "kind": "list",
         "sample": [model_to_dict(i, exclude=[Url.user.email]) for i in items],
@@ -25,7 +25,7 @@ def paginate(query):
 
 @urls_bp.route('/urls', methods=['POST'])
 def create_url():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     if 'original_url' not in data or 'title' not in data or 'user_id' not in data:
         abort(400, description="Missing required fields: original_url, title, user_id")
         
@@ -44,11 +44,11 @@ def create_url():
 @urls_bp.route('/urls', methods=['GET'])
 def get_urls():
     query = Url.select()
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     
     uid = request.args.get('user_id') or data.get('user_id')
     if uid is not None:
-        query = query.where(Url.user_id == uid)
+        query = query.where(Url.user == uid)
         
     active = request.args.get('is_active') or data.get('is_active')
     if active is not None:

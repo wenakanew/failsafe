@@ -10,17 +10,15 @@ from playhouse.shortcuts import model_to_dict
 users_bp = Blueprint("users_bp", __name__)
 
 def paginate(query):
-    # Try query args first, then json body
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
-    if request.is_json:
-        data = request.get_json(silent=True) or {}
-        page = data.get('page', page)
-        per_page = data.get('per_page', per_page)
+    data = request.get_json(silent=True, force=True) or request.form or {}
+    page = data.get('page', page)
+    per_page = data.get('per_page', per_page)
         
     total = query.count()
-    items = query.paginate(page, per_page)
+    items = query.paginate(int(page), int(per_page))
     return {
         "kind": "list",
         "sample": [model_to_dict(i) for i in items],
@@ -29,7 +27,7 @@ def paginate(query):
 
 @users_bp.route('/users', methods=['POST'])
 def create_user():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     if 'username' not in data or 'email' not in data:
         abort(400, description="Missing required fields: username, email")
         
@@ -77,7 +75,7 @@ def delete_user(user_id):
 
 @users_bp.route('/users/bulk', methods=['POST'])
 def load_csv():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True, force=True) or request.form or {}
     filepath = data.get('file')
     if not filepath or not os.path.exists(filepath):
         abort(404, description="File not found")
