@@ -18,14 +18,17 @@ def create_app():
 
     import time
     from app.database import db
+    
+    from app.models.user import User
+    from app.models.post import Post
+    db.create_tables([User, Post], safe=True)
 
     @app.route("/health")
     def health():
         start = time.time()
         try:
             db.connect(reuse_if_open=True)
-            from app.models.user import User
-            User.select().limit(1).execute()
+            db.execute_sql('SELECT 1')
             db.close()
             latency = time.time() - start
             return jsonify({"status": "healthy", "latency_ms": round(latency * 1000, 2)}), 200
