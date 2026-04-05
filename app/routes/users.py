@@ -15,7 +15,7 @@ def create_user():
     
     # 1. Validation
     try:
-        validate_email(data['email'])
+        validate_email(data['email'], check_deliverability=False)
     except EmailNotValidError:
         abort(400, description="Invalid email format")
         

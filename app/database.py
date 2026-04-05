@@ -23,7 +23,7 @@ class BaseModel(Model):
 def init_db(app):
     if os.environ.get("TESTING") == "1":
         from peewee import SqliteDatabase
-        database = SqliteDatabase(':memory:')
+        database = SqliteDatabase('test_hackathon.db')
     else:
         database = PostgresqlDatabase(
             os.environ.get("DATABASE_NAME", "hackathon_db"),
