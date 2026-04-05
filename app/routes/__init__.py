@@ -1,8 +1,5 @@
 def register_routes(app):
-    """Register all route blueprints with the Flask app.
-
-    Add your blueprints here. Example:
-        from app.routes.products import products_bp
-        app.register_blueprint(products_bp)
-    """
-    pass
+    from app.routes.users import users_bp
+    from app.routes.posts import posts_bp
+    app.register_blueprint(users_bp)
+    app.register_blueprint(posts_bp)

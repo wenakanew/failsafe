@@ -1,192 +1,65 @@
-# MLH PE Hackathon — Flask + Peewee + PostgreSQL Template
+# 🧯 FailSafe Social API
 
-A minimal hackathon starter template. You get the scaffolding and database wiring — you build the models, routes, and CSV loading logic.
+> **Production Engineering Hackathon 2026 - Reliability Track Submission**
+> A highly resilient, fault-tolerant social backend engineered to survive database outages, container crashes, and malicious inputs.
 
-**Stack:** Flask · Peewee ORM · PostgreSQL · uv
+## 🗺️ The Map (Bronze Tier)
 
-## **Important**
-
-You need to work with around the seed files that you can find in [MLH PE Hackathon](https://mlh-pe-hackathon.com) platform. This will help you build the schema for the database and have some data to do some testing and submit your project for judging. If you need help with this, reach out on Discord or on the Q&A tab on the platform.
-
-## Prerequisites
-
-- **uv** — a fast Python package manager that handles Python versions, virtual environments, and dependencies automatically.
-  Install it with:
-  ```bash
-  # macOS / Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-
-  # Windows (PowerShell)
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-  For other methods see the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
-- PostgreSQL running locally (you can use Docker or a local instance)
-
-## uv Basics
-
-`uv` manages your Python version, virtual environment, and dependencies automatically — no manual `python -m venv` needed.
-
-| Command | What it does |
-|---------|--------------|
-| `uv sync` | Install all dependencies (creates `.venv` automatically) |
-| `uv run <script>` | Run a script using the project's virtual environment |
-| `uv add <package>` | Add a new dependency |
-| `uv remove <package>` | Remove a dependency |
-
-## Quick Start
-
-```bash
-# 1. Clone the repo
-git clone <repo-url> && cd mlh-pe-hackathon
-
-# 2. Install dependencies
-uv sync
-
-# 3. Create the database
-createdb hackathon_db
-
-# 4. Configure environment
-cp .env.example .env   # edit if your DB credentials differ
-
-# 5. Run the server
-uv run run.py
-
-# 6. Verify
-curl http://localhost:5000/health
-# → {"status":"ok"}
+### Architecture Diagram
+```mermaid
+graph TD
+    Client([Client API Request]) --> LB[Docker NGINX / Exposed Port]
+    LB --> App[FailSafe Flask API]
+    
+    subgraph Containerized Environment
+        App -- Validates & Processes --> Peewee[Peewee ORM]
+        Peewee -- Retries 3x --> DB[(PostgreSQL Database)]
+    end
+    
+    App -. Chaos Engineering .-> Docker[Docker Daemon Auto-Restart]
 ```
 
-## Project Structure
+### 🛠️ Quick Start (Setup Instructions)
+This setup is designed so anyone can easily build and run the application. 
+1. **Clone the Repo:**
+   `git clone https://github.com/your-username/failsafe-social-api.git`
+2. **Setup the Environment:**
+   Copy `.env.example` to `.env` (it contains safe defaults for the hackathon).
+3. **Launch the Infrastructure:**
+   ```bash
+   docker-compose up --build
+   ```
+   The API will automatically spin up on `http://localhost:5000` and self-heal if interrupted.
 
-```
-mlh-pe-hackathon/
-├── app/
-│   ├── __init__.py          # App factory (create_app)
-│   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
-│   ├── models/
-│   │   └── __init__.py      # Import your models here
-│   └── routes/
-│       └── __init__.py      # register_routes() — add blueprints here
-├── .env.example             # DB connection template
-├── .gitignore               # Python + uv gitignore
-├── .python-version          # Pin Python version for uv
-├── pyproject.toml           # Project metadata + dependencies
-├── run.py                   # Entry point: uv run run.py
-└── README.md
-```
+### 📡 Core API Endpoints
+- **`GET /health`**
+  - **Purpose:** Checks the application pulse and measures DB connection latency.
+  - **Returns:** System health and latency in milliseconds.
+- **`POST /users`**
+  - **Purpose:** Securely create a new user account.
+  - **Payload:** `{"name": "...", "email": "...", "age": 25}`
+  - **Returns:** Created user ID and data, or `400` if invalid.
+- **`GET /users`**
+  - **Purpose:** Retrieve all registered users.
+- **`POST /posts`**
+  - **Purpose:** Publish a new social post.
+  - **Payload:** `{"user_id": 1, "content": "Hello World!"}`
+  - **Returns:** Created post metadata.
+- **`GET /posts`**
+  - **Purpose:** View the global feed of all posts.
 
-## How to Add a Model
+---
 
-1. Create a file in `app/models/`, e.g. `app/models/product.py`:
+## 📖 The Manual (Silver Tier)
+For operators, please see the following guides:
+- [**Deployment Guide**](docs/DEPLOY.md) (How to ship and rollback)
+- [**Troubleshooting Guide**](docs/TROUBLESHOOTING.md) (Bugs faced, configuration list, how to fix things)
 
-```python
-from peewee import CharField, DecimalField, IntegerField
+---
 
-from app.database import BaseModel
-
-
-class Product(BaseModel):
-    name = CharField()
-    category = CharField()
-    price = DecimalField(decimal_places=2)
-    stock = IntegerField()
-```
-
-2. Import it in `app/models/__init__.py`:
-
-```python
-from app.models.product import Product
-```
-
-3. Create the table (run once in a Python shell or a setup script):
-
-```python
-from app.database import db
-from app.models.product import Product
-
-db.create_tables([Product])
-```
-
-## How to Add Routes
-
-1. Create a blueprint in `app/routes/`, e.g. `app/routes/products.py`:
-
-```python
-from flask import Blueprint, jsonify
-from playhouse.shortcuts import model_to_dict
-
-from app.models.product import Product
-
-products_bp = Blueprint("products", __name__)
-
-
-@products_bp.route("/products")
-def list_products():
-    products = Product.select()
-    return jsonify([model_to_dict(p) for p in products])
-```
-
-2. Register it in `app/routes/__init__.py`:
-
-```python
-def register_routes(app):
-    from app.routes.products import products_bp
-    app.register_blueprint(products_bp)
-```
-
-## How to Load CSV Data
-
-```python
-import csv
-from peewee import chunked
-from app.database import db
-from app.models.product import Product
-
-def load_csv(filepath):
-    with open(filepath, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-
-    with db.atomic():
-        for batch in chunked(rows, 100):
-            Product.insert_many(batch).execute()
-```
-
-## Useful Peewee Patterns
-
-```python
-from peewee import fn
-from playhouse.shortcuts import model_to_dict
-
-# Select all
-products = Product.select()
-
-# Filter
-cheap = Product.select().where(Product.price < 10)
-
-# Get by ID
-p = Product.get_by_id(1)
-
-# Create
-Product.create(name="Widget", category="Tools", price=9.99, stock=50)
-
-# Convert to dict (great for JSON responses)
-model_to_dict(p)
-
-# Aggregations
-avg_price = Product.select(fn.AVG(Product.price)).scalar()
-total = Product.select(fn.SUM(Product.stock)).scalar()
-
-# Group by
-from peewee import fn
-query = (Product
-         .select(Product.category, fn.COUNT(Product.id).alias("count"))
-         .group_by(Product.category))
-```
-
-## Tips
-
-- Use `model_to_dict` from `playhouse.shortcuts` to convert model instances to dictionaries for JSON responses.
-- Wrap bulk inserts in `db.atomic()` for transactional safety and performance.
-- The template uses `teardown_appcontext` for connection cleanup, so connections are closed even when requests fail.
-- Check `.env.example` for all available configuration options.
+## 🏛️ The Codex (Gold Tier)
+For on-call and system design reviews, consult the codex:
+- [**Incident Runbooks**](docs/RUNBOOK.md) (Action guides for 3 AM alerts)
+- [**Architecture Decision Log**](docs/DECISIONS.md) (Why we chose this stack)
+- [**Capacity Plan**](docs/CAPACITY.md) (When we break and how we scale)
+- [**System Failure Modes**](FAILURE_MODES.md) (Our chaotic responses)

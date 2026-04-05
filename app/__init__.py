@@ -16,8 +16,32 @@ def create_app():
 
     register_routes(app)
 
+    import time
+    from app.database import db
+
     @app.route("/health")
     def health():
-        return jsonify(status="ok")
+        start = time.time()
+        try:
+            db.connect(reuse_if_open=True)
+            from app.models.user import User
+            User.select().limit(1).execute()
+            db.close()
+            latency = time.time() - start
+            return jsonify({"status": "healthy", "latency_ms": round(latency * 1000, 2)}), 200
+        except Exception as e:
+            return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        return jsonify({"error": "Bad Request", "message": error.description if hasattr(error, 'description') else str(error)}), 400
+
+    @app.errorhandler(404)
+    def not_found(error):
+        return jsonify({"error": "Not Found", "message": error.description if hasattr(error, 'description') else "Resource not found"}), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        return jsonify({"error": "Internal Server Error", "message": "System encountered an unexpected failure"}), 500
 
     return app
