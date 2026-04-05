@@ -84,6 +84,8 @@ def delete_url(url_id):
     if not url:
         abort(404, description="URL not found")
     url.delete_instance()
+    return '', 204
+
 @urls_bp.route('/<short_code>', methods=['GET'])
 def redirect_to_url(short_code):
     from app.models.event import Event
