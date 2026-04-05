@@ -17,4 +17,4 @@ jobs:
     
     - name: Test Flow
       run: |
-        uv run pytest --cov=app --cov-fail-under=70
+        PYTHONPATH=. uv run pytest --cov=app --cov-fail-under=70
