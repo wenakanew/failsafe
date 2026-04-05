@@ -20,8 +20,9 @@ def create_app():
     from app.database import db
     
     from app.models.user import User
-    from app.models.post import Post
-    db.create_tables([User, Post], safe=True)
+    from app.models.url import Url
+    from app.models.event import Event
+    db.create_tables([User, Url, Event], safe=True)
 
     @app.route("/health")
     def health():

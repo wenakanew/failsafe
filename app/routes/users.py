@@ -1,43 +1,93 @@
+import os
+import csv
 from flask import Blueprint, request, jsonify, abort
-from email_validator import validate_email, EmailNotValidError
-from peewee import IntegrityError
+from peewee import IntegrityError, chunked
 
 from app.models.user import User
-from app.database import retry_db_operation
+from app.database import retry_db_operation, db
+from playhouse.shortcuts import model_to_dict
 
 users_bp = Blueprint("users_bp", __name__)
 
+def paginate(query):
+    # Try query args first, then json body
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        page = data.get('page', page)
+        per_page = data.get('per_page', per_page)
+        
+    total = query.count()
+    items = query.paginate(page, per_page)
+    return {
+        "kind": "list",
+        "sample": [model_to_dict(i) for i in items],
+        "total_items": total
+    }
+
 @users_bp.route('/users', methods=['POST'])
 def create_user():
-    data = request.get_json()
-    if not data or not all(k in data for k in ('name', 'email', 'age')):
-        abort(400, description="Missing required fields: name, email, age")
-    
-    # 1. Validation
-    try:
-        validate_email(data['email'], check_deliverability=False)
-    except EmailNotValidError:
-        abort(400, description="Invalid email format")
+    data = request.get_json() or {}
+    if 'username' not in data or 'email' not in data:
+        abort(400, description="Missing required fields: username, email")
         
-    if not isinstance(data['age'], int) or data['age'] < 13:
-        abort(400, description="User must be at least 13 years old")
-
-    # 2. Idempotency (Return existing if email matches)
-    existing_user = User.get_or_none(User.email == data['email'])
-    if existing_user:
-        return jsonify({"id": existing_user.id, "name": existing_user.name, "email": existing_user.email, "message": "User already exists"}), 200
-
-    # 3. Create with Retry Logic
-    def save_user():
-        return User.create(name=data['name'], email=data['email'], age=data['age'])
-    
+    def save():
+        return User.create(username=data['username'], email=data['email'])
+        
     try:
-        new_user = retry_db_operation(save_user)
-        return jsonify({"id": new_user.id, "name": new_user.name, "email": new_user.email}), 201
+        new_user = retry_db_operation(save)
+        return jsonify(model_to_dict(new_user)), 201
     except IntegrityError:
-        abort(500, description="Database integrity error during user creation")
+        abort(400, description="User already exists")
 
 @users_bp.route('/users', methods=['GET'])
 def get_users():
-    users = User.select()
-    return jsonify([{"id": u.id, "name": u.name, "email": u.email, "age": u.age} for u in users]), 200
+    return jsonify(paginate(User.select())), 200
+
+@users_bp.route('/users/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    user = User.get_or_none(User.id == user_id)
+    if not user:
+        abort(404, description="User not found")
+    return jsonify(model_to_dict(user)), 200
+
+@users_bp.route('/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
+    user = User.get_or_none(User.id == user_id)
+    if not user:
+        abort(404, description="User not found")
+        
+    data = request.get_json() or {}
+    if 'username' in data:
+        user.username = data['username']
+    if 'email' in data:
+        user.email = data['email']
+    user.save()
+    return jsonify(model_to_dict(user)), 200
+
+@users_bp.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    user = User.get_or_none(User.id == user_id)
+    if not user:
+        abort(404, description="User not found")
+    user.delete_instance()
+    return '', 204
+
+@users_bp.route('/users/bulk', methods=['POST'])
+def load_csv():
+    data = request.get_json() or {}
+    filepath = data.get('file')
+    if not filepath or not os.path.exists(filepath):
+        abort(404, description="File not found")
+        
+    with open(filepath, newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    with db.atomic():
+        for batch in chunked(rows, 100):
+            User.insert_many(batch).on_conflict_ignore().execute()
+            
+    return jsonify({"status": "ok"}), 201
