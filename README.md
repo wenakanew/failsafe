@@ -22,7 +22,7 @@ graph TD
 ### 🛠️ Quick Start (Setup Instructions)
 This setup is designed so anyone can easily build and run the application. 
 1. **Clone the Repo:**
-   `git clone https://github.com/your-username/failsafe-social-api.git`
+   `git clone https://github.com/wenakanew/failsafe.git`
 2. **Setup the Environment:**
    Copy `.env.example` to `.env` (it contains safe defaults for the hackathon).
 3. **Launch the Infrastructure:**

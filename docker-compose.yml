@@ -1,9 +1,32 @@
 version: '3.8'
+
 services:
   api:
     build: .
     ports:
       - "5000:5000"
     restart: always
+    depends_on:
+      - db
     environment:
       - FLASK_ENV=production
+      - DATABASE_NAME=hackathon_db
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=hackathon_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
